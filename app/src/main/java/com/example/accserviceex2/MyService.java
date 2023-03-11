@@ -6,6 +6,8 @@ import android.app.Notification;
 import android.content.Context;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewTreeObserver;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.Toast;
@@ -28,11 +30,12 @@ public class MyService extends AccessibilityService {
     }
     private static final String TAG = "MyService";
 
+
     //全局变量HashMap<key, value>
     //key为界面的唯一标识
     //value为该界面上可以点击跳转的按钮的list
     private HashMap<String, ArrayList<AccessibilityNodeInfo>> ClickedMap = new HashMap<>();
-//    private HashMap<Integer, Boolean> IsVisitedNodeMap = new HashMap<>();
+
     private HashMap<String, NodePair> StrToNodeInfo = new HashMap<>();
     private static final String APP_PACKAGE_NAME = "com.example.myapplication"; // 要遍历的应用包名
     private static final Set<String> SYSTEM_APPS = new HashSet<>(Arrays.asList(
@@ -49,37 +52,16 @@ public class MyService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent accessibilityEvent) {
+
         if (accessibilityEvent.getPackageName() == null || SYSTEM_APPS.contains(accessibilityEvent.getPackageName().toString())) {
             return;
         }
  
         if(accessibilityEvent.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){
+            DelayRendering();
             DealClickableWidget(accessibilityEvent);
+//            printCurrentWindowWidget(accessibilityEvent);
         }
-    }
-    private void printCurrentWindowWidget(AccessibilityEvent accessibilityEvent){
-        //下面的cnt代码主要是跳过一开始的framelayout
-        if(cnt ==0){
-            cnt++;
-            return;
-        }
-        AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
-        if (nodeInfo == null) {
-            return;
-        }
-        //获取当前界面的唯一标识
-        //打印当前界面
-        String pkgName = accessibilityEvent.getPackageName().toString();
-        String className = accessibilityEvent.getClassName().toString();
-        String currentWindowName = pkgName + "--" + className;
-        Log.d(TAG, "当前界面为: " + currentWindowName);
-        ArrayList<AccessibilityNodeInfo> nodeList = new ArrayList<>();
-        addAllClickableNode(nodeList, nodeInfo);
-        //打印当前界面组件
-        for (AccessibilityNodeInfo node : nodeList) {
-            Log.d(TAG, getEditTextId(node));
-        }
-        Log.d(TAG, "*****************************************");
     }
 
     private void DealClickableWidget(AccessibilityEvent accessibilityEvent) {
@@ -110,38 +92,69 @@ public class MyService extends AccessibilityService {
         for(int i = 0; i < nodeList.size(); i++){
             //需要判断该组件有没有被点击过
             AccessibilityNodeInfo node = nodeList.get(i);
-            if(!IsNodeVisited(node)){
-                String nodeId = getEditTextId(node);
+            if(!IsNodeVisited(node, i)){
+                String nodeId = getUniqueId(node, i);
                 NodePair nodePair = StrToNodeInfo.get(nodeId);
                 nodePair.isvisted = true;
                 StrToNodeInfo.put(nodeId, nodePair);
-                Log.d(TAG, "处理可点击组件:" + getEditTextId(node));
-                if(node.getClassName().toString().equals("android.widget.EditText")){
+                Log.d(TAG, "处理可点击组件:" + nodeId);
+                String currentWidgetClassName = node.getClassName().toString();
+                if(currentWidgetClassName.equals("android.widget.EditText")){
                     //do nothing
                 }else{
                     node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-                    try {
-                        Thread.sleep(3000);
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
+                    if(currentWidgetClassName.equals("android.widget.CheckBox")){
+                        //do nothing
+                    }else{
+                        return;
                     }
-                    return;
+//                    DelayRendering();
                 }
             }
         }
         Log.d(TAG, "退出当前界面: " + currentWindowName);
         performGlobalAction(GLOBAL_ACTION_BACK);
-        try {
-            Thread.sleep(3000);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+//        DelayRendering();
+        Log.d(TAG, "*****************************************");
+    }
+
+    private void printCurrentWindowWidget(AccessibilityEvent accessibilityEvent){
+        //下面的cnt代码主要是跳过一开始的framelayout
+        if(cnt ==0){
+            cnt++;
+            return;
+        }
+        AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
+        if (nodeInfo == null) {
+            return;
+        }
+        //获取当前界面的唯一标识
+        //打印当前界面
+        String pkgName = accessibilityEvent.getPackageName().toString();
+        String className = accessibilityEvent.getClassName().toString();
+        String currentWindowName = pkgName + "--" + className;
+        Log.d(TAG, "当前界面为: " + currentWindowName);
+        ArrayList<AccessibilityNodeInfo> nodeList = new ArrayList<>();
+        addAllClickableNode(nodeList, nodeInfo);
+        //打印当前界面组件
+        for(int i = 0; i < nodeList.size(); i++){
+            Log.d(TAG, getUniqueId(nodeList.get(i), i));
         }
         Log.d(TAG, "*****************************************");
     }
 
-    public boolean IsNodeVisited(AccessibilityNodeInfo node){
-        String ViewId = getEditTextId(node);
-        NodePair nodeInfo = StrToNodeInfo.get(ViewId);
+    public void DelayRendering(){
+        long millis = 3000;
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public boolean IsNodeVisited(AccessibilityNodeInfo node, long seq){
+        String nodeUniqueId = getUniqueId(node, seq);
+        NodePair nodeInfo = StrToNodeInfo.get(nodeUniqueId);
         return nodeInfo.isvisted;
     }
 
@@ -165,19 +178,15 @@ public class MyService extends AccessibilityService {
         if ((action & AccessibilityNodeInfo.ACTION_CLICK) != 0) {
             // 当前节点是可点击的组件
             // TODO: 在这里执行您的点击操作
-//            Log.d(TAG, "可点击" + editTextId);
-            String editTextId = getEditTextId(node);
+            String nodeUniqueId = getUniqueId(node, nodeList.size());
             NodePair nodePair = new NodePair(nodeList.size(), false);
-            StrToNodeInfo.put(editTextId, nodePair);
+            StrToNodeInfo.put(nodeUniqueId, nodePair);
             nodeList.add(node);
-//          node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-//          performGlobalAction(GLOBAL_ACTION_BACK);
         } else {
             // 当前节点不是可点击的组件
             // TODO: 在这里执行其他操作
 //            Log.d(TAG, "不可点击" + res);
         }
-
     }
 
     //提取当前窗口的所有文本内容
@@ -220,14 +229,13 @@ public class MyService extends AccessibilityService {
     }
 
 
-    private String getEditTextId(AccessibilityNodeInfo nodeInfo) {
+    // Get Unique Node Id  唯一标识一个组件
+    private String getUniqueId(AccessibilityNodeInfo nodeInfo, long idx) {
         CharSequence packageName = nodeInfo.getPackageName();
         CharSequence className = nodeInfo.getClassName();
         CharSequence viewId =  nodeInfo.getText();
-        return packageName + ":" + className + ":" + viewId;
+        return packageName + ":" + className + ":" + viewId + ":" + idx;
     }
-
-
 
     private void traverseNodeTree(AccessibilityNodeInfo nodeInfo, StringBuilder sb) {
         if (nodeInfo == null) {
@@ -263,6 +271,7 @@ public class MyService extends AccessibilityService {
         AccessibilityServiceInfo info = getServiceInfo();
         info.flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS | AccessibilityServiceInfo.FLAG_REQUEST_ENHANCED_WEB_ACCESSIBILITY;
         setServiceInfo(info);
+
     }
 
 }
