@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.Notification;
 import android.content.Context;
+import android.os.Handler;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -52,16 +53,15 @@ public class MyService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent accessibilityEvent) {
-
         if (accessibilityEvent.getPackageName() == null || SYSTEM_APPS.contains(accessibilityEvent.getPackageName().toString())) {
             return;
         }
- 
+
         if(accessibilityEvent.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){
-            DelayRendering();
             DealClickableWidget(accessibilityEvent);
 //            printCurrentWindowWidget(accessibilityEvent);
         }
+
     }
 
     private void DealClickableWidget(AccessibilityEvent accessibilityEvent) {
@@ -74,6 +74,8 @@ public class MyService extends AccessibilityService {
         if (nodeInfo == null) {
             return;
         }
+        DelayRendering();
+        Log.d(TAG, "回调开始");
         //获取当前界面的唯一标识
         String pkgName = accessibilityEvent.getPackageName().toString();
         String className = accessibilityEvent.getClassName().toString();
@@ -89,6 +91,10 @@ public class MyService extends AccessibilityService {
         //遍历没有被访问过的可点击组件
         ArrayList<AccessibilityNodeInfo> nodeList = ClickedMap.get(currentWindowName);
         Log.d(TAG, "当前界面存在的可点击组件的个数: " + nodeList.size());
+        if(nodeList.size() == 0){
+            Log.d(TAG, currentWindowName + "没有可点击组件，直接退出");
+        }
+
         for(int i = 0; i < nodeList.size(); i++){
             //需要判断该组件有没有被点击过
             AccessibilityNodeInfo node = nodeList.get(i);
@@ -99,22 +105,33 @@ public class MyService extends AccessibilityService {
                 StrToNodeInfo.put(nodeId, nodePair);
                 Log.d(TAG, "处理可点击组件:" + nodeId);
                 String currentWidgetClassName = node.getClassName().toString();
+
+                //暂时不处理没有文本的
+                //后期需要替换成其他的策略
+                if(node.getText() == null){
+                    continue;
+                }
                 if(currentWidgetClassName.equals("android.widget.EditText")){
                     //do nothing
                 }else{
-                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-                    if(currentWidgetClassName.equals("android.widget.CheckBox")){
-                        //do nothing
+                    boolean isclick = node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    if(isclick){
+                        if(currentWidgetClassName.equals("android.widget.CheckBox")){
+                            Log.d(TAG, "点击后没跳转呢");
+                        }else{
+                            Log.d(TAG, "点击后跳转页面,return for循环");
+                            return;
+                        }
                     }else{
-                        return;
+                        Log.d(TAG, "该组件不能被点击");
                     }
-//                    DelayRendering();
                 }
             }
         }
+
+
         Log.d(TAG, "退出当前界面: " + currentWindowName);
         performGlobalAction(GLOBAL_ACTION_BACK);
-//        DelayRendering();
         Log.d(TAG, "*****************************************");
     }
 
@@ -173,9 +190,8 @@ public class MyService extends AccessibilityService {
                 addAllClickableNode(nodeList, childNode);
             }
         }
-        // 操作当前节点
-        int action = node.getActions();
-        if ((action & AccessibilityNodeInfo.ACTION_CLICK) != 0) {
+
+        if (isClickable(node)) {
             // 当前节点是可点击的组件
             // TODO: 在这里执行您的点击操作
             String nodeUniqueId = getUniqueId(node, nodeList.size());
@@ -187,7 +203,42 @@ public class MyService extends AccessibilityService {
             // TODO: 在这里执行其他操作
 //            Log.d(TAG, "不可点击" + res);
         }
+
     }
+
+    public boolean isClickable(AccessibilityNodeInfo nodeInfo) {
+        if (nodeInfo == null) {
+            return false;
+        }
+        boolean res = false;
+        // 判断节点是否可点击
+        if (nodeInfo.isClickable()) {
+            res = true;
+        }
+//        // 判断节点是否是 ViewGroup
+//        if(nodeInfo.isClickable()){
+//            if (nodeInfo.getChildCount() > 0) {
+//                CharSequence pkgName = nodeInfo.getClassName();
+//                CharSequence clzName = nodeInfo.getPackageName();
+//                CharSequence text = nodeInfo.getText();
+//                String nodeStr = pkgName + ":" +clzName+":" + text;
+//                Log.d(TAG, nodeStr+"  View Group如下：");
+//                for (int i = 0; i < nodeInfo.getChildCount(); i++) {
+//                    AccessibilityNodeInfo childNode = nodeInfo.getChild(i);
+////                    if (isClickable(childNode)) {
+//                        CharSequence lpkgName = childNode.getClassName();
+//                        CharSequence lclzName = childNode.getPackageName();
+//                        CharSequence ltext = childNode.getText();
+//                        String str  = lpkgName + ":" + lclzName + ":" + ltext;
+//                        Log.d(TAG, "该子节点的可点击组件"+ str);
+////                    }
+//                }
+//            }
+//        }
+        return res;
+    }
+
+
 
     //提取当前窗口的所有文本内容
     // 事件类型为 TYPE_WINDOW_CONTENT_CHANGED
