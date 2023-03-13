@@ -60,9 +60,66 @@ public class MyService extends AccessibilityService {
         if(accessibilityEvent.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){
             DealClickableWidget(accessibilityEvent);
 //            printCurrentWindowWidget(accessibilityEvent);
+//            testThreadProblem(accessibilityEvent);
         }
 
     }
+
+    public void testThreadProblem(AccessibilityEvent accessibilityEvent){
+        //下面的cnt代码主要是跳过一开始的framelayout
+        if(cnt ==0){
+            cnt++;
+            return;
+        }
+        AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
+        if (nodeInfo == null) {
+            return;
+        }
+        if (nodeInfo != null) {
+            StringBuilder sb = new StringBuilder();
+            traverseNodeTree(nodeInfo, sb);
+            String allText = sb.toString();
+            // 在这里处理获取到的所有文本内容
+            Log.e(TAG, "上一次" + allText);
+        }
+
+        //获取当前界面的唯一标识
+        //打印当前界面
+        String pkgName = accessibilityEvent.getPackageName().toString();
+        String className = accessibilityEvent.getClassName().toString();
+        String currentWindowName = pkgName + "--" + className;
+        Log.d(TAG, "当前界面为: " + currentWindowName);
+        ArrayList<AccessibilityNodeInfo> nodeList = new ArrayList<>();
+        addAllClickableNode(nodeList, nodeInfo);
+        //打印当前界面组件
+        for(int i = 0; i < nodeList.size(); i++){
+            Log.d(TAG, getUniqueId(nodeList.get(i), i));
+        }
+
+        AccessibilityNodeInfo currentNode = nodeList.get(0);
+        currentNode.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        try {
+            Thread.sleep(3000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        AccessibilityNodeInfo nextnodeInfo = getRootInActiveWindow();
+//        String nextnodepkgName = nextnodeInfo.getPackageName().toString();
+//        String nextnodeclassName = nextnodeInfo.getClassName().toString();
+//        String nextnodeName = nextnodepkgName + "--" + nextnodeclassName;
+//        Log.d(TAG, "后一个node为: " + nextnodeName);
+        if (nextnodeInfo != null) {
+            StringBuilder sb = new StringBuilder();
+            traverseNodeTree(nextnodeInfo, sb);
+            String allText = sb.toString();
+            // 在这里处理获取到的所有文本内容
+            Log.e(TAG, "下一次" + allText);
+        }
+        Log.d(TAG, "*****************************************");
+    }
+
+
 
     private void DealClickableWidget(AccessibilityEvent accessibilityEvent) {
         //下面的cnt代码主要是跳过一开始的framelayout
@@ -108,9 +165,9 @@ public class MyService extends AccessibilityService {
 
                 //暂时不处理没有文本的
                 //后期需要替换成其他的策略
-                if(node.getText() == null){
-                    continue;
-                }
+//                if(node.getText() == null){
+//                    continue;
+//                }
                 if(currentWidgetClassName.equals("android.widget.EditText")){
                     //do nothing
                 }else{
@@ -295,10 +352,9 @@ public class MyService extends AccessibilityService {
         String className = nodeInfo.getClassName().toString();
         String resourceId = nodeInfo.getViewIdResourceName();
 //        String viewId = nodeInfo.getViewIdResourceName();
-        Log.e(TAG, className + " " + resourceId);
+//        Log.e(TAG, className + " " + resourceId);
         if (nodeInfo.getText() != null) {
             sb.append(nodeInfo.getText());
-
             sb.append(" ");
         }
         for (int i = 0; i < nodeInfo.getChildCount(); i++) {
