@@ -34,6 +34,7 @@ public class MyService extends AccessibilityService {
 
     private static long delayTime = 1500;
 
+    // AS线程监测到界面改变时的回调函数
     @Override
     public void onAccessibilityEvent(AccessibilityEvent accessibilityEvent) {
         if (accessibilityEvent.getPackageName() == null || SYSTEM_APPS.contains(accessibilityEvent.getPackageName().toString())) {
@@ -42,12 +43,15 @@ public class MyService extends AccessibilityService {
 
         // 当前界面改变，调用DealClickableWidget
         if (accessibilityEvent.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-//            checkWidgets(accessibilityEvent);
-            printCurrentWindowWidget(accessibilityEvent);
+            // 探测文本和控件个数，并打印可编辑控件信息
+            checkWidgets(accessibilityEvent);
+            // 直接打印当前界面的所有空间信息
+//            printCurrentWindowWidget(accessibilityEvent);
         }
 
     }
 
+    // 提取文本、获得当前界面的控件列表、检查这些控件并打印可编辑控件对象的各种属性信息
     private void checkWidgets(AccessibilityEvent accessibilityEvent) {
         Log.d(TAG, "**********************************************************************************");
 
